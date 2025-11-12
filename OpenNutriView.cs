@@ -42,13 +42,17 @@ namespace OpenNutriView
                 foreach (StoreComponent store in WorldObjectUtil
                     .AllObjsWithComponent<StoreComponent>()
                     .Where(store => store != null
-                        && store.Currency != null
+                        && store.StoreData != null
+                        && store.StoreData.Currency != null
                         && store.Parent != null
                         && store.Enabled
                         && store.IsRPCAuthorized(user.Player, AccessType.ConsumerAccess, Array.Empty<object>())
-                        && !ignoredCurrencyIds.Contains(store.Currency.Id)
+
                         && World.WrappedDistance(user.Player.WorldPosXZ(), store.Parent.WorldPosXZ()) <= shopMaxDistance))
                 {
+                    var currency = store.StoreData.Currency;
+                    if (currency == null || ignoredCurrencyIds.Contains(currency.Id))
+                        continue;
                     foreach (var tradeOffer in store.StoreData.SellOffers
                         .Where(o => o != null
                             && o.Stack != null

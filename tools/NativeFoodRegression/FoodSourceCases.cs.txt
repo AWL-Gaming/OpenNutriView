@@ -1,0 +1,41 @@
+public static class FoodSourceCases {
+ static List<string> Results=new List<string>();
+ static void Check(string name,bool condition){if(!condition)throw new Exception(name);Results.Add(name);}
+ static void Reset(){WorldObjectUtil.Stores.Clear();WorldObjectUtil.Containers.Clear();}
+ static ItemStack Food(int quantity=1,float calories=100)=>new ItemStack{Item=new FoodA{Calories=calories},Quantity=quantity};
+ static StoreComponent Store(){var store=new StoreComponent();store.StoreData.SellOffers.Add(new TradeOffer{Stack=Food(),Price=1});WorldObjectUtil.Stores.Add(store);return store;}
+ public static string[] Run(){
+  Reset();Check("null user census is empty",FoodSourceUnderTest.Query(null).Count==0);
+  var user=new User{Player=null};Check("disconnected player census is empty",FoodSourceUnderTest.Query(user).Count==0);
+  user=new User{Inventory=null};Check("missing user inventory census is empty",FoodSourceUnderTest.Query(user).Count==0);user=new User();
+  WorldObjectUtil.Stores.Add(null);WorldObjectUtil.Stores.Add(new StoreComponent{StoreData=null});WorldObjectUtil.Stores.Add(new StoreComponent{Parent=null});WorldObjectUtil.Stores.Add(new StoreComponent{StoreData=new StoreData{Currency=null}});
+  Check("null store rows and incomplete store state are skipped",FoodSourceUnderTest.Query(user).Count==0);
+  Reset();WorldObjectUtil.Containers.Add(null);WorldObjectUtil.Containers.Add(new StorageComponent{Parent=null});WorldObjectUtil.Containers.Add(new StorageComponent{Parent=new WorldObject{Owners=null}});WorldObjectUtil.Containers.Add(new StorageComponent{Inventory=null});
+  Check("incomplete container rows are skipped",FoodSourceUnderTest.Query(user).Count==0);
+  Reset();var store=Store();Check("authorized positive shop food remains available",FoodSourceUnderTest.Query(user)[typeof(FoodA)].Contains(store.Parent));
+  store.Enabled=false;Check("disabled shop food is unavailable",FoodSourceUnderTest.Query(user).Count==0);store.Enabled=true;store.Authorized=false;
+  Check("unauthorized shop food is unavailable",FoodSourceUnderTest.Query(user).Count==0);store.Authorized=true;
+  Check("ignored currency remains excluded",FoodSourceUnderTest.Query(user,new HashSet<int>{1}).Count==0);
+  Check("missing ignored-currency list retains default inclusion",FoodSourceUnderTest.Query(user,null).Count==1);
+  store.StoreData.SellOffers[0].Price=20;Check("shop price limit remains enforced",FoodSourceUnderTest.Query(user,cost:100).Count==0);store.StoreData.SellOffers[0].Price=1;
+  store.Parent.Position=new Vector2(10,0);Check("shop distance limit remains enforced",FoodSourceUnderTest.Query(user,distance:5).Count==0);store.Parent.Position=Vector2.Zero;
+  store.DuringAuthorization=()=>store.StoreData.Currency=null;
+  Check("currency removed after filter validation safely skips shop",FoodSourceUnderTest.Query(user).Count==0);
+  Reset();user.Inventory.Stacks.Add(Food(0));user.Inventory.Stacks.Add(null);user.Inventory.Stacks.Add(new ItemStack{Item=new Item()});
+  Check("empty and non-food player stacks are not suggested",FoodSourceUnderTest.Query(user).Count==0);user.Inventory.Stacks.Clear();
+  user.Inventory.Stacks.Add(Food());Check("player food retains the inventory location marker",FoodSourceUnderTest.Query(user)[typeof(FoodA)].SetEquals(new WorldObject[]{null}));user.Inventory.Stacks.Clear();
+  var container=new StorageComponent();container.Inventory.Stacks.Add(Food());WorldObjectUtil.Containers.Add(container);
+  Check("owned container food remains available",FoodSourceUnderTest.Query(user)[typeof(FoodA)].Contains(container.Parent));container.Parent.Owners.Authorized=false;
+  Check("another owner's container food stays excluded",FoodSourceUnderTest.Query(user).Count==0);container.Parent.Owners.Authorized=true;container.Inventory.Stacks[0].Quantity=0;
+  Check("empty container stacks are not suggested",FoodSourceUnderTest.Query(user).Count==0);
+  Reset();user.Inventory.Stacks.Add(Food(calories:0));user.Inventory.Stacks.Add(Food(calories:-1));Check("zero and negative calorie foods are excluded",FoodSourceUnderTest.Query(user).Count==0);user.Inventory.Stacks.Clear();
+  Reset();store=Store();store.StoreData.SellOffers.Add(null);store.StoreData.SellOffers.Add(new TradeOffer{Stack=null});store.StoreData.SellOffers.Add(new TradeOffer{Stack=Food(0)});
+  Check("malformed or empty offers do not hide valid shop food",FoodSourceUnderTest.Query(user)[typeof(FoodA)].Count==1);
+  StorageManager.Fail=true;StorageManager.Loads=0;StorageManager.Deletes=0;StorageManager.Enumerations=0;StorageManager.SavedFiles=2;var threw=false;
+  try{new ConfigLoaderUnderTest();}catch(InvalidOperationException){threw=true;}
+  Check("actual constructor reports storage failure",threw&&StorageManager.Loads==1);
+  Check("failed load preserves both saved settings files",StorageManager.Deletes==0&&StorageManager.Enumerations==0&&StorageManager.SavedFiles==2);
+  StorageManager.Fail=false;new ConfigLoaderUnderTest();Check("successful constructor retains normal storage loading",StorageManager.Loads==2&&StorageManager.SavedFiles==2);
+  return Results.ToArray();
+ }
+}

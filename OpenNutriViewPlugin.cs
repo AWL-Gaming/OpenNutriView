@@ -15,16 +15,7 @@ namespace OpenNutriView
 
         public OpenNutriViewPlugin()
         {
-            try
-            {
-                data = StorageManager.LoadOrCreate<OpenNutriViewData>("OpenNutriView", null);
-            }
-            catch
-            {
-                foreach (string file in StorageManager.GetFiles("OpenNutriView"))
-                    StorageManager.Delete(file);
-                data = StorageManager.LoadOrCreate<OpenNutriViewData>("OpenNutriView", null);
-            }
+            data = StorageManager.LoadOrCreate<OpenNutriViewData>("OpenNutriView", null);
         }
 
         public string GetCategory() => Localizer.DoStr("Mods");

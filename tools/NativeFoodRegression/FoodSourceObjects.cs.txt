@@ -1,0 +1,34 @@
+public class Item { public Type Type => GetType(); }
+public class FoodItem:Item { public float Calories=100; }
+public class FoodA:FoodItem{}
+public class FoodB:FoodItem{}
+public class ItemStack {public Item Item;public int Quantity=1;}
+public class Inventory {public List<ItemStack> Stacks=new List<ItemStack>();}
+public class Player {public Vector2 Position;public Vector2 WorldPosXZ()=>Position;}
+public class User {public Player Player=new Player();public Inventory Inventory=new Inventory();}
+public class Owners {public bool Authorized=true;public bool ContainsUser(User user)=>Authorized;}
+public class WorldObject {public Owners Owners=new Owners();public Vector2 Position;public Vector2 WorldPosXZ()=>Position;}
+public class Currency {public int Id=1;}
+public class StoreData {public Currency Currency=new Currency();public List<TradeOffer> SellOffers=new List<TradeOffer>();}
+public class TradeOffer {public ItemStack Stack;public float Price;}
+public enum AccessType {ConsumerAccess}
+public class StoreComponent {
+ public StoreData StoreData=new StoreData();public WorldObject Parent=new WorldObject();public bool Enabled=true;public bool Authorized=true;public Action DuringAuthorization;
+ public bool IsRPCAuthorized(Player player,AccessType access,object[] args){DuringAuthorization?.Invoke();return Authorized;}
+}
+public class StorageComponent {public WorldObject Parent=new WorldObject();public Inventory Inventory=new Inventory();}
+public static class World {public static float WrappedDistance(Vector2 first,Vector2 second)=>Vector2.Distance(first,second);}
+public static class WorldObjectUtil {
+ public static List<StoreComponent> Stores=new List<StoreComponent>();public static List<StorageComponent> Containers=new List<StorageComponent>();
+ public static IEnumerable<T> AllObjsWithComponent<T>()=>(IEnumerable<T>)(object)(typeof(T)==typeof(StoreComponent)?(object)Stores:Containers);
+}
+public static class DictionaryExtensions {
+ public static HashSet<WorldObject> GetOrAdd(this Dictionary<Type,HashSet<WorldObject>> dictionary,Type key){if(!dictionary.TryGetValue(key,out var value))dictionary.Add(key,value=new HashSet<WorldObject>());return value;}
+}
+public class OpenNutriViewData{}
+public static class StorageManager {
+ public static bool Fail;public static int Loads;public static int Deletes;public static int Enumerations;public static int SavedFiles=2;
+ public static T LoadOrCreate<T>(string name,object unused) where T:new(){Loads++;if(Fail)throw new InvalidOperationException("owned simulated storage read error");return new T();}
+ public static IEnumerable<string> GetFiles(string name){Enumerations++;return new[]{"owned-user-settings","owned-mod-settings"};}
+ public static void Delete(string file){Deletes++;SavedFiles--;}
+}

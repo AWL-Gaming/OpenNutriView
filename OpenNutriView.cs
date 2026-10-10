@@ -28,13 +28,27 @@ namespace OpenNutriView
     {
         public static class NextFood
         {
+            private sealed class StomachTooltipCacheEntry
+            {
+                public DateTime CreatedUtc { get; init; }
+                public LocString Value { get; init; }
+            }
+
+            private static readonly ConditionalWeakTable<User, StomachTooltipCacheEntry> StomachTooltipCache = new();
+            private static readonly object StomachTooltipCacheLock = new();
+            private static readonly TimeSpan StomachTooltipCacheLifetime = TimeSpan.FromSeconds(3);
+
             static Dictionary<Type, HashSet<WorldObject>> GetAccessableFood(User user, HashSet<int> ignoredCurrencyIds, float shopMaxCostPer1000Calories = float.PositiveInfinity, float shopMaxDistance = float.PositiveInfinity)
             {
                 var foods = new Dictionary<Type, HashSet<WorldObject>>();
 
+                if (user?.Player == null || user.Inventory == null)
+                    return foods;
+                ignoredCurrencyIds ??= new HashSet<int>();
+
                 void addFood(ItemStack stack, WorldObject obj)
                 {
-                    if (stack.Item is not FoodItem food || food.Calories <= 0)
+                    if (stack?.Item is not FoodItem food || stack.Quantity <= 0 || food.Calories <= 0)
                         return;
                     foods.GetOrAdd(food.Type).Add(obj);
                 }
@@ -48,9 +62,11 @@ namespace OpenNutriView
                         && store.Parent != null
                         && store.Enabled
                         && store.IsRPCAuthorized(user.Player, AccessType.ConsumerAccess, Array.Empty<object>())
-                        && !ignoredCurrencyIds.Contains(store.StoreData.Currency.Id)
                         && World.WrappedDistance(user.Player.WorldPosXZ(), store.Parent.WorldPosXZ()) <= shopMaxDistance))
                 {
+                    var currency = store.StoreData.Currency;
+                    if (currency == null || ignoredCurrencyIds.Contains(currency.Id))
+                        continue;
                     foreach (var tradeOffer in store.StoreData.SellOffers
                         .Where(o => o != null
                             && o.Stack != null
@@ -62,12 +78,12 @@ namespace OpenNutriView
                 }
 
                 // Containers
-                foreach (var storageComponent in WorldObjectUtil.AllObjsWithComponent<StorageComponent>().Where(i => i.Parent?.Owners?.ContainsUser(user) == true))
-                    foreach (var itemStack in storageComponent.Inventory.Stacks.Where(item => item.Item is FoodItem))
+                foreach (var storageComponent in WorldObjectUtil.AllObjsWithComponent<StorageComponent>().Where(i => i?.Parent?.Owners?.ContainsUser(user) == true && i.Inventory != null))
+                    foreach (var itemStack in storageComponent.Inventory.Stacks)
                         addFood(itemStack, storageComponent.Parent);
 
                 // Player inventory
-                foreach (var stack in user.Inventory.Stacks.Where(s => s.Item is FoodItem))
+                foreach (var stack in user.Inventory.Stacks)
                     addFood(stack, null);
 
                 return foods;
@@ -89,7 +105,17 @@ namespace OpenNutriView
 
             public static LocString Stomach(Stomach stomach)
             {
-                var config = OpenNutriViewData.Obj.GetConfig(stomach.Owner);
+                if (stomach?.Owner == null)
+                    return LocString.Empty;
+                var owner = stomach.Owner;
+                var now = DateTime.UtcNow;
+                lock (StomachTooltipCacheLock)
+                {
+                    if (StomachTooltipCache.TryGetValue(owner, out var cached) && now - cached.CreatedUtc <= StomachTooltipCacheLifetime)
+                        return cached.Value;
+                }
+
+                var config = OpenNutriViewData.Obj.GetConfig(owner);
                 var (stomachNutrients, stomachCalories, foodCalories) = LoadCurrentStomach(stomach);
 
                 var foods = GetAccessableFood(stomach.Owner, config.IgnoredCurrencies.ToHashSet(), config.MaxCostPer1000Calories, config.MaxShopDistance);
@@ -126,11 +152,19 @@ namespace OpenNutriView
                 }
                 if (addAssumedFooter)
                     sb.AppendLine(new LocString("* Assumed delicious tasting"));
-                return sb.ToLocString();
+                var result = sb.ToLocString();
+                lock (StomachTooltipCacheLock)
+                {
+                    StomachTooltipCache.Remove(owner);
+                    StomachTooltipCache.Add(owner, new StomachTooltipCacheEntry { CreatedUtc = now, Value = result });
+                }
+                return result;
             }
 
             public static LocString FoodItem(Player player, FoodItem food)
             {
+                if (player?.User?.Stomach == null || food == null)
+                    return LocString.Empty;
                 var (stomachNutrients, stomachCalories, foodCalories) = LoadCurrentStomach(player.User.Stomach);
 
                 var (gain, assumedTaste, nutrition) = CalculateGain(food, player.User.Stomach, stomachNutrients, stomachCalories, foodCalories);
@@ -170,7 +204,9 @@ namespace OpenNutriView
 
                 var subTotal = nutrientTotal * varietyMultiplier * tastinessMultiplier * balancedDietMultiplier * cravingMultiplier * dinnerPartyMultiplier;
                 if (subTotal < 0) subTotal = 0;
-                var newSkillRate = subTotal + EcoSim.BaseSkillGainRate;
+#pragma warning disable CS0618
+                var newSkillRate = (subTotal + EcoSim.BaseSkillGainRate) * BalanceConfig.Obj?.SkillGainMultiplier??1;
+#pragma warning restore CS0618
                 var itemTasteMultiplier = !stomach.TasteBuds.FoodToTaste.TryGetValue(food.Type, out ItemTaste itemTaste) || !itemTaste.Discovered ? ItemTaste.TastinessMultiplier[(int)ItemTaste.TastePreference.Delicious] : itemTaste.TastinessMult;
                 var gain = newSkillRate - stomach.NutrientSkillRate();
                 var nutrition = food.Nutrition.NutrientTotal() * itemTasteMultiplier;

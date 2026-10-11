@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <NoWarn>$(NoWarn);CA1416</NoWarn>
-    <EcoNativeDir Condition="'$(EcoNativeDir)' == ''">$(AWL_ECO_NATIVE_DIR)</EcoNativeDir>
+    <EcoNativeDir Condition="'$(EcoNativeDir)' == ''">$(ECO_NATIVE_DIR)</EcoNativeDir>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\OpenNutriView.csproj" />
@@ -16,6 +16,6 @@
     <Reference Include="$(EcoNativeDir)\Microsoft.CodeAnalysis.CSharp.dll" />
   </ItemGroup>
   <Target Name="RequireNativeEcoRuntime" BeforeTargets="ResolveReferences">
-    <Error Condition="!Exists('$(EcoNativeDir)\Eco.Gameplay.dll')" Text="Set EcoNativeDir or AWL_ECO_NATIVE_DIR to an immutable copy of the Eco 1099 runtime DLLs." />
+    <Error Condition="!Exists('$(EcoNativeDir)\Eco.Gameplay.dll')" Text="Set EcoNativeDir or ECO_NATIVE_DIR to an immutable copy of the Eco 1099 runtime DLLs." />
   </Target>
 </Project>

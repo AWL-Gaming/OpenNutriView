@@ -10,8 +10,8 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using NextFood = OpenNutriView.OpenNutriView.NextFood;
 
 var root = Path.GetFullPath(args.Length == 1 ? args[0] : Directory.GetCurrentDirectory());
-var nativeDir = Environment.GetEnvironmentVariable("AWL_ECO_NATIVE_DIR") ?? throw new Exception("AWL_ECO_NATIVE_DIR is required");
-var dependencyDir = Environment.GetEnvironmentVariable("AWL_ECO_NATIVE_DEPENDENCY_DIR") ?? nativeDir;
+var nativeDir = Environment.GetEnvironmentVariable("ECO_NATIVE_DIR") ?? throw new Exception("ECO_NATIVE_DIR is required");
+var dependencyDir = Environment.GetEnvironmentVariable("ECO_NATIVE_DEPENDENCY_DIR") ?? nativeDir;
 AssemblyLoadContext.Default.Resolving += (_, name) =>
 {
     foreach (var directory in new[] { nativeDir, dependencyDir })
